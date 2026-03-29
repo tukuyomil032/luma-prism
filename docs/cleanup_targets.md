@@ -1,22 +1,26 @@
 # Cleanup Targets
 
-Safe Targets
+## Safe Targets
 
-cache
-logs
-meta
-instance logs
-crash reports
-shader cache
+- `cache`
+- `logs`
+- `meta`
+- `catpacks`
+- `instances/*/.minecraft/logs`
+- `instances/*/.minecraft/crash-reports`
+- `instances/*/.minecraft/.replay_cache`
+- `instances/*/.minecraft/essential/screenshot-cache`
+- `instances/*/.minecraft/essential/cosmetic-cache`
+- `instances/*/.minecraft/essential/screenshot-checksum-caches.json`
 
+## Conditional Targets
 
-Conditional Targets
+- unused libraries (`--include-unused-libraries`)
+- unused assets (`--include-unused-assets`)
 
-unused libraries
-unused java
+## Protected (Never Auto-delete)
 
-
-Advanced Targets
-
-duplicate mods
-unused assets
+- `instances/*/.minecraft/mods`
+- `instances/*/.minecraft/config`
+- `instances/*/.minecraft/saves`
+- `instances/*/.minecraft/resourcepacks`

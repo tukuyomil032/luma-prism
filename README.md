@@ -14,7 +14,7 @@
 luma-prism scans PrismLauncher data and helps you reclaim space safely.
 
 It focuses on:
-- safe cleanup targets (`cache`, `logs`, `meta`, instance logs/crash reports)
+- safe cleanup targets (`cache`, `logs`, `meta`, instance logs/crash reports, known regenerable mod caches)
 - full instance hotspot analysis (all `.minecraft` data, not only cleanup-safe paths)
 - duplicate mod detection
 - world size analysis
