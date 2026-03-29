@@ -1,6 +1,6 @@
 [package]
 name = "luma-prism"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2024"
 description = "A fast PrismLauncher storage analyzer and safe cleanup CLI"
 license = "MIT"
