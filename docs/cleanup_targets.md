@@ -19,6 +19,7 @@
 - unused assets (`--include-unused-assets`)
 - map tile caches (`--include-map-caches`)
 	- `instances/*/.minecraft/journeymap/cache`
+	- `instances/*/.minecraft/journeymap/**/cache*` (nested cache-like paths)
 	- `instances/*/.minecraft/journeymap/webmap`
 	- `instances/*/.minecraft/xaerominimap/cache`
 	- `instances/*/.minecraft/xaeroworldmap/cache`

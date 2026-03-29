@@ -104,11 +104,16 @@ Top500 内の高DL Mod から、保存先が容量増加に直結するものを
 - 追加対象: `.replay_cache`, `essential/screenshot-cache`, `essential/cosmetic-cache`, `essential/screenshot-checksum-caches.json`
 - いずれも再生成可能なキャッシュ/索引のみを対象化
 - map系は明示オプトイン化: `--include-map-caches` (JourneyMap/Xaero/VoxelMap)
+- map系は `cache` / `webmap` を含む入れ子パスも検出して候補化
 
 6. 差分スナップショット
 - `scan --hotspots-diff` で前回スナップショットとの差分を比較
 - 増加したパスをカテゴリ付きで表示
 - 比較後に現在結果をスナップショットとして更新
+
+7. 分類精度の改善
+- ルート設定系ファイル (`options*.txt`, `servers.dat`, `*.cfg`, `*.properties`, `*.json` など) を `config` へ寄せて `unknown` を削減
+- map判定キーワードを拡張 (`journey_map`, `xaeroworld`, `atlas`)
 
 ### 設計意図
 

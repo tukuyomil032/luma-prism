@@ -170,7 +170,7 @@ Useful clean options:
 - `--kind <kind>` (repeatable: `global`, `instance`, `advanced`)
 - `--min-size <size>` (e.g. `500MB`, `2GB`)
 - `--older-than-days <days>`
-- `--include-map-caches` (opt-in map tile caches: JourneyMap/Xaero/VoxelMap)
+- `--include-map-caches` (opt-in map tile caches: JourneyMap/Xaero/VoxelMap, nested cache-like paths included)
 - `--select` (interactive candidate selection)
 
 ## Release Automation

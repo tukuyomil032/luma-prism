@@ -481,6 +481,9 @@ fn classify_hotspot_category(parts: &[String]) -> HotspotCategory {
             || part.contains("ftbchunks")
             || part.contains("dynmap")
             || part.contains("squaremap")
+            || part.contains("journey_map")
+            || part.contains("xaeroworld")
+            || part.contains("atlas")
     });
 
     let has_media_keyword = lower_parts.iter().any(|part| {
@@ -506,6 +509,19 @@ fn classify_hotspot_category(parts: &[String]) -> HotspotCategory {
             || part.ends_with(".log")
     });
 
+    let has_config_keyword = lower_parts.iter().any(|part| {
+        part == "options.txt"
+            || part == "optionsof.txt"
+            || part == "optionsshaders.txt"
+            || part == "servers.dat"
+            || part.ends_with(".cfg")
+            || part.ends_with(".conf")
+            || part.ends_with(".ini")
+            || part.ends_with(".toml")
+            || part.ends_with(".properties")
+            || part.ends_with(".json")
+    });
+
     if first == "saves" {
         return if has_map_keyword {
             HotspotCategory::MapData
@@ -518,7 +534,16 @@ fn classify_hotspot_category(parts: &[String]) -> HotspotCategory {
         return HotspotCategory::Mods;
     }
 
-    if first == "config" {
+    if first == "config" || (lower_parts.len() == 1 && has_config_keyword) {
+        return HotspotCategory::Config;
+    }
+
+    if has_config_keyword
+        && !has_map_keyword
+        && !has_media_keyword
+        && !has_cache_keyword
+        && !has_log_keyword
+    {
         return HotspotCategory::Config;
     }
 
@@ -700,6 +725,18 @@ mod tests {
     #[test]
     fn classify_config_path() {
         let category = classify_hotspot_category_from_relative_path("config/sodium-options.json");
+        assert_eq!(category, HotspotCategory::Config);
+    }
+
+    #[test]
+    fn classify_root_options_file_as_config() {
+        let category = classify_hotspot_category_from_relative_path("options.txt");
+        assert_eq!(category, HotspotCategory::Config);
+    }
+
+    #[test]
+    fn classify_root_servers_file_as_config() {
+        let category = classify_hotspot_category_from_relative_path("servers.dat");
         assert_eq!(category, HotspotCategory::Config);
     }
 

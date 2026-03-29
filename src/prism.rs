@@ -1,6 +1,8 @@
 use anyhow::{Context, Result};
 use serde::Serialize;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use walkdir::WalkDir;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct CleanupTarget {
@@ -114,17 +116,7 @@ pub fn collect_cleanup_targets(root: &Path) -> Vec<CleanupTarget> {
 
 pub fn collect_map_cache_targets(root: &Path) -> Vec<CleanupTarget> {
     let mut targets = Vec::new();
-
-    let push_if_exists =
-        |targets: &mut Vec<CleanupTarget>, kind: &str, label: &str, path: PathBuf| {
-            if path.exists() {
-                targets.push(CleanupTarget {
-                    kind: kind.to_string(),
-                    label: label.to_string(),
-                    path,
-                });
-            }
-        };
+    let mut seen_paths = HashSet::new();
 
     let instances_dir = root.join("instances");
     if let Ok(entries) = std::fs::read_dir(instances_dir) {
@@ -138,40 +130,140 @@ pub fn collect_map_cache_targets(root: &Path) -> Vec<CleanupTarget> {
             let mc = instance_path.join(".minecraft");
 
             // Optional candidates: potentially large map tiles that can be rebuilt.
-            push_if_exists(
+            push_if_exists_unique(
                 &mut targets,
+                &mut seen_paths,
                 "advanced",
                 &format!("{instance_name}/journeymap/cache"),
                 mc.join("journeymap/cache"),
             );
-            push_if_exists(
+            push_if_exists_unique(
                 &mut targets,
+                &mut seen_paths,
                 "advanced",
                 &format!("{instance_name}/journeymap/webmap"),
                 mc.join("journeymap/webmap"),
             );
-            push_if_exists(
+            push_if_exists_unique(
                 &mut targets,
+                &mut seen_paths,
                 "advanced",
                 &format!("{instance_name}/xaerominimap/cache"),
                 mc.join("xaerominimap/cache"),
             );
-            push_if_exists(
+            push_if_exists_unique(
                 &mut targets,
+                &mut seen_paths,
                 "advanced",
                 &format!("{instance_name}/xaeroworldmap/cache"),
                 mc.join("xaeroworldmap/cache"),
             );
-            push_if_exists(
+            push_if_exists_unique(
                 &mut targets,
+                &mut seen_paths,
                 "advanced",
                 &format!("{instance_name}/voxelmap/cache"),
                 mc.join("voxelmap/cache"),
+            );
+
+            collect_cache_like_subpaths(
+                &mut targets,
+                &mut seen_paths,
+                &instance_name,
+                "journeymap",
+                &mc.join("journeymap"),
+            );
+            collect_cache_like_subpaths(
+                &mut targets,
+                &mut seen_paths,
+                &instance_name,
+                "xaerominimap",
+                &mc.join("xaerominimap"),
+            );
+            collect_cache_like_subpaths(
+                &mut targets,
+                &mut seen_paths,
+                &instance_name,
+                "xaeroworldmap",
+                &mc.join("xaeroworldmap"),
+            );
+            collect_cache_like_subpaths(
+                &mut targets,
+                &mut seen_paths,
+                &instance_name,
+                "voxelmap",
+                &mc.join("voxelmap"),
             );
         }
     }
 
     targets
+}
+
+fn push_if_exists_unique(
+    targets: &mut Vec<CleanupTarget>,
+    seen_paths: &mut HashSet<String>,
+    kind: &str,
+    label: &str,
+    path: PathBuf,
+) {
+    if !path.exists() {
+        return;
+    }
+
+    let key = path.to_string_lossy().to_string();
+    if seen_paths.insert(key) {
+        targets.push(CleanupTarget {
+            kind: kind.to_string(),
+            label: label.to_string(),
+            path,
+        });
+    }
+}
+
+fn collect_cache_like_subpaths(
+    targets: &mut Vec<CleanupTarget>,
+    seen_paths: &mut HashSet<String>,
+    instance_name: &str,
+    scope_label: &str,
+    scope_root: &Path,
+) {
+    if !scope_root.exists() {
+        return;
+    }
+
+    for entry in WalkDir::new(scope_root)
+        .max_depth(5)
+        .into_iter()
+        .filter_map(Result::ok)
+    {
+        let path = entry.path();
+        if path == scope_root {
+            continue;
+        }
+
+        let Ok(relative) = path.strip_prefix(scope_root) else {
+            continue;
+        };
+        let relative_norm = relative.to_string_lossy().replace('\\', "/");
+        let relative_lower = relative_norm.to_ascii_lowercase();
+        let file_name = entry.file_name().to_string_lossy().to_ascii_lowercase();
+
+        let cache_like = relative_lower.contains("cache")
+            || relative_lower.starts_with("webmap")
+            || file_name == "webmap";
+        if !cache_like {
+            continue;
+        }
+
+        push_if_exists_unique(
+            targets,
+            seen_paths,
+            "advanced",
+            &format!("{instance_name}/{scope_label}/{relative_norm}"),
+            path.to_path_buf(),
+        );
+    }
 }
 
 pub fn list_instances(root: &Path) -> Vec<String> {
@@ -242,6 +334,33 @@ mod tests {
             targets
                 .iter()
                 .all(|target| target.kind == "advanced" && target.label.starts_with("pack/"))
+        );
+
+        fs::remove_dir_all(&root).expect("cleanup temp root");
+    }
+
+    #[test]
+    fn collect_map_cache_targets_discovers_nested_cache_paths() {
+        let root = create_temp_root("luma-prism-map-cache-nested");
+        let mc_root = root.join("instances/pack/.minecraft");
+
+        fs::create_dir_all(mc_root.join("journeymap/server/world/cache"))
+            .expect("create nested journeymap cache");
+        fs::create_dir_all(mc_root.join("journeymap/webmap/tiles"))
+            .expect("create webmap directory");
+
+        let targets = collect_map_cache_targets(&root);
+        let labels: Vec<String> = targets.iter().map(|target| target.label.clone()).collect();
+
+        assert!(
+            labels
+                .iter()
+                .any(|label| label.contains("pack/journeymap/server/world/cache"))
+        );
+        assert!(
+            labels
+                .iter()
+                .any(|label| label.contains("pack/journeymap/webmap/tiles"))
         );
 
         fs::remove_dir_all(&root).expect("cleanup temp root");
