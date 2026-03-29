@@ -43,6 +43,7 @@ pub fn run() -> Result<()> {
             instances,
             hotspots_depth,
             hotspots_top,
+            hotspots_diff,
         } => {
             let selected =
                 resolve_selected_instances(&root, &instances, all_instances, cli.json, lang)?;
@@ -76,12 +77,28 @@ pub fn run() -> Result<()> {
                     ))
                 })?;
 
+            let hotspot_growth = if hotspots_diff {
+                let baseline = config::load_hotspot_snapshot(&root)?;
+                let snapshot_path = Some(config::hotspot_snapshot_path(&root)?);
+                let growth = scanner::analyze_hotspot_growth(
+                    &instance_hotspots,
+                    baseline.as_ref(),
+                    snapshot_path,
+                    30,
+                );
+                config::save_hotspot_snapshot(&root, &instance_hotspots)?;
+                Some(growth)
+            } else {
+                None
+            };
+
             if cli.json {
                 let report = ScanJsonReport {
                     cleanup: summary,
                     unused_libraries,
                     unused_assets,
                     instance_hotspots,
+                    hotspot_growth,
                 };
                 println!("{}", serde_json::to_string_pretty(&report)?);
             } else {
@@ -90,6 +107,7 @@ pub fn run() -> Result<()> {
                     &unused_libraries,
                     &unused_assets,
                     &instance_hotspots,
+                    hotspot_growth.as_ref(),
                     lang,
                 )?;
             }
@@ -100,6 +118,7 @@ pub fn run() -> Result<()> {
             yes,
             include_unused_libraries,
             include_unused_assets,
+            include_map_caches,
             kinds,
             min_size,
             older_than_days,
@@ -112,6 +131,7 @@ pub fn run() -> Result<()> {
                 yes,
                 include_unused_libraries,
                 include_unused_assets,
+                include_map_caches,
                 kinds,
                 min_size_bytes,
                 older_than_days,
@@ -132,6 +152,10 @@ pub fn run() -> Result<()> {
                     Ok(scanner::scan_unused_assets(&root))
                 })?;
                 targets.extend(scanner::cleanup_targets_from_unused_assets(&assets, 5000));
+            }
+
+            if mode.include_map_caches {
+                targets.extend(prism::collect_map_cache_targets(&root));
             }
 
             let filter = cleaner::CleanFilter {
@@ -411,4 +435,5 @@ struct ScanJsonReport {
     unused_libraries: scanner::UnusedLibrariesSummary,
     unused_assets: scanner::UnusedAssetsSummary,
     instance_hotspots: scanner::InstanceHotspotsSummary,
+    hotspot_growth: Option<scanner::HotspotGrowthSummary>,
 }

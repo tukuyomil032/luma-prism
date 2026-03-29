@@ -1,7 +1,8 @@
 use crate::cli::Language;
 use crate::i18n::{Msg, text};
 use crate::scanner::{
-    CleanupSummary, InstanceHotspotsSummary, UnusedAssetsSummary, UnusedLibrariesSummary,
+    CleanupSummary, HotspotGrowthSummary, InstanceHotspotsSummary, UnusedAssetsSummary,
+    UnusedLibrariesSummary,
 };
 use anyhow::Result;
 use console::{Key, Term, style, truncate_str};
@@ -16,9 +17,17 @@ pub fn present_scan_report(
     unused_libs: &UnusedLibrariesSummary,
     unused_assets: &UnusedAssetsSummary,
     hotspots: &InstanceHotspotsSummary,
+    hotspot_growth: Option<&HotspotGrowthSummary>,
     lang: Language,
 ) -> Result<()> {
-    let lines = build_scan_lines(summary, unused_libs, unused_assets, hotspots, lang);
+    let lines = build_scan_lines(
+        summary,
+        unused_libs,
+        unused_assets,
+        hotspots,
+        hotspot_growth,
+        lang,
+    );
     pager(&lines, lang)
 }
 
@@ -27,6 +36,7 @@ fn build_scan_lines(
     unused_libs: &UnusedLibrariesSummary,
     unused_assets: &UnusedAssetsSummary,
     hotspots: &InstanceHotspotsSummary,
+    hotspot_growth: Option<&HotspotGrowthSummary>,
     lang: Language,
 ) -> Vec<String> {
     let mut lines = Vec::new();
@@ -173,6 +183,43 @@ fn build_scan_lines(
         text(lang, Msg::ScanInstanceHotspotsTotal),
         human_bytes(hotspots.total_bytes)
     ));
+
+    if let Some(growth) = hotspot_growth {
+        lines.push(String::new());
+        lines.push(text(lang, Msg::ScanHotspotGrowth).to_string());
+
+        if !growth.snapshot_found {
+            lines.push(text(lang, Msg::ScanHotspotGrowthNoBaseline).to_string());
+        } else {
+            lines.push(format!(
+                "{}: {}",
+                text(lang, Msg::ScanHotspotGrowthComparedEntries),
+                growth.compared_entries
+            ));
+
+            if growth.increases.is_empty() {
+                lines.push(text(lang, Msg::ScanNone).to_string());
+            } else {
+                for entry in &growth.increases {
+                    lines.push(format!(
+                        "  +{:>10} [{:>10} -> {:>10}] [{}] {}/{}",
+                        human_bytes(entry.delta_bytes),
+                        human_bytes(entry.previous_bytes),
+                        human_bytes(entry.current_bytes),
+                        entry.category.as_label(),
+                        entry.instance,
+                        entry.relative_path
+                    ));
+                }
+            }
+        }
+
+        lines.push(format!(
+            "{}: {}",
+            text(lang, Msg::ScanHotspotGrowthTotal),
+            human_bytes(growth.total_growth_bytes)
+        ));
+    }
 
     lines
 }

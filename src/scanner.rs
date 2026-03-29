@@ -1,7 +1,7 @@
 mod scan;
 mod unused;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::PathBuf;
 
@@ -73,7 +73,7 @@ pub struct UsageSummary {
     pub total_bytes: u64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstanceHotspotPath {
     pub relative_path: String,
     pub path: PathBuf,
@@ -81,7 +81,7 @@ pub struct InstanceHotspotPath {
     pub bytes: u64,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum HotspotCategory {
     World,
@@ -111,13 +111,13 @@ impl HotspotCategory {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HotspotCategoryStat {
     pub category: HotspotCategory,
     pub bytes: u64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstanceHotspotGroup {
     pub instance: String,
     pub total_bytes: u64,
@@ -125,7 +125,7 @@ pub struct InstanceHotspotGroup {
     pub entries: Vec<InstanceHotspotPath>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstanceHotspotsSummary {
     pub root: PathBuf,
     pub max_depth: usize,
@@ -133,6 +133,25 @@ pub struct InstanceHotspotsSummary {
     pub categories: Vec<HotspotCategoryStat>,
     pub instances: Vec<InstanceHotspotGroup>,
     pub total_bytes: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct HotspotGrowthEntry {
+    pub instance: String,
+    pub relative_path: String,
+    pub category: HotspotCategory,
+    pub previous_bytes: u64,
+    pub current_bytes: u64,
+    pub delta_bytes: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct HotspotGrowthSummary {
+    pub snapshot_found: bool,
+    pub snapshot_path: Option<PathBuf>,
+    pub compared_entries: usize,
+    pub increases: Vec<HotspotGrowthEntry>,
+    pub total_growth_bytes: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -166,8 +185,8 @@ pub struct UnusedAssetsSummary {
 }
 
 pub use scan::{
-    dir_size, scan_cleanup_targets, scan_duplicate_mods, scan_instance_hotspots_scoped,
-    scan_instance_usage, scan_world_sizes_scoped_with_breakdown,
+    analyze_hotspot_growth, dir_size, scan_cleanup_targets, scan_duplicate_mods,
+    scan_instance_hotspots_scoped, scan_instance_usage, scan_world_sizes_scoped_with_breakdown,
 };
 pub use unused::{
     cleanup_targets_from_unused_assets, cleanup_targets_from_unused_libraries, scan_unused_assets,

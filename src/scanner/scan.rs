@@ -1,7 +1,8 @@
 use super::{
     CleanupStat, CleanupSummary, DuplicateModEntry, DuplicateModsSummary, HotspotCategory,
-    HotspotCategoryStat, InstanceHotspotGroup, InstanceHotspotPath, InstanceHotspotsSummary,
-    InstanceUsage, UsageSummary, WorldBreakdownItem, WorldStat, WorldsSummary, instance_allowed,
+    HotspotCategoryStat, HotspotGrowthEntry, HotspotGrowthSummary, InstanceHotspotGroup,
+    InstanceHotspotPath, InstanceHotspotsSummary, InstanceUsage, UsageSummary, WorldBreakdownItem,
+    WorldStat, WorldsSummary, instance_allowed,
 };
 use rayon::prelude::*;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -373,6 +374,80 @@ pub fn scan_instance_hotspots_scoped(
     }
 }
 
+pub fn analyze_hotspot_growth(
+    current: &InstanceHotspotsSummary,
+    baseline: Option<&InstanceHotspotsSummary>,
+    snapshot_path: Option<PathBuf>,
+    top_n: usize,
+) -> HotspotGrowthSummary {
+    let Some(previous) = baseline else {
+        return HotspotGrowthSummary {
+            snapshot_found: false,
+            snapshot_path,
+            compared_entries: 0,
+            increases: Vec::new(),
+            total_growth_bytes: 0,
+        };
+    };
+
+    let mut previous_map: HashMap<(String, String), u64> = HashMap::new();
+    for group in &previous.instances {
+        for entry in &group.entries {
+            previous_map.insert(
+                (group.instance.clone(), entry.relative_path.clone()),
+                entry.bytes,
+            );
+        }
+    }
+
+    let mut increases = Vec::new();
+    let mut total_growth_bytes = 0_u64;
+    let mut compared_entries = 0_usize;
+
+    for group in &current.instances {
+        for entry in &group.entries {
+            compared_entries += 1;
+
+            let key = (group.instance.clone(), entry.relative_path.clone());
+            let previous_bytes = previous_map.get(&key).copied().unwrap_or(0);
+
+            if entry.bytes > previous_bytes {
+                let delta_bytes = entry.bytes - previous_bytes;
+                total_growth_bytes += delta_bytes;
+
+                increases.push(HotspotGrowthEntry {
+                    instance: group.instance.clone(),
+                    relative_path: entry.relative_path.clone(),
+                    category: entry.category,
+                    previous_bytes,
+                    current_bytes: entry.bytes,
+                    delta_bytes,
+                });
+            }
+        }
+    }
+
+    increases.sort_by(|a, b| {
+        b.delta_bytes
+            .cmp(&a.delta_bytes)
+            .then_with(|| b.current_bytes.cmp(&a.current_bytes))
+            .then_with(|| a.instance.cmp(&b.instance))
+            .then_with(|| a.relative_path.cmp(&b.relative_path))
+    });
+
+    if increases.len() > top_n {
+        increases.truncate(top_n);
+    }
+
+    HotspotGrowthSummary {
+        snapshot_found: true,
+        snapshot_path,
+        compared_entries,
+        increases,
+        total_growth_bytes,
+    }
+}
+
 fn path_component_to_string(component: std::path::Component<'_>) -> Option<String> {
     match component {
         std::path::Component::Normal(value) => Some(value.to_string_lossy().to_string()),
@@ -568,7 +643,12 @@ pub fn dir_size(path: &Path) -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{HotspotCategory, classify_hotspot_category_from_relative_path};
+    use super::{
+        HotspotCategory, HotspotCategoryStat, InstanceHotspotGroup, InstanceHotspotPath,
+        InstanceHotspotsSummary, analyze_hotspot_growth,
+        classify_hotspot_category_from_relative_path,
+    };
+    use std::path::PathBuf;
 
     #[test]
     fn classify_world_path() {
@@ -627,5 +707,70 @@ mod tests {
     fn classify_unknown_path() {
         let category = classify_hotspot_category_from_relative_path("foo/bar/data.bin");
         assert_eq!(category, HotspotCategory::Unknown);
+    }
+
+    #[test]
+    fn hotspot_growth_detects_increases_only() {
+        let baseline = sample_hotspots("pack", vec![("saves/world", HotspotCategory::World, 100)]);
+        let current = sample_hotspots(
+            "pack",
+            vec![
+                ("saves/world", HotspotCategory::World, 140),
+                ("screenshots", HotspotCategory::Media, 60),
+            ],
+        );
+
+        let growth = analyze_hotspot_growth(&current, Some(&baseline), None, 10);
+        assert!(growth.snapshot_found);
+        assert_eq!(growth.compared_entries, 2);
+        assert_eq!(growth.increases.len(), 2);
+        assert_eq!(growth.total_growth_bytes, 100);
+        assert_eq!(growth.increases[0].delta_bytes, 60);
+        assert_eq!(growth.increases[1].delta_bytes, 40);
+    }
+
+    #[test]
+    fn hotspot_growth_without_baseline() {
+        let current = sample_hotspots("pack", vec![("logs", HotspotCategory::Logs, 32)]);
+        let growth = analyze_hotspot_growth(&current, None, None, 10);
+        assert!(!growth.snapshot_found);
+        assert_eq!(growth.compared_entries, 0);
+        assert!(growth.increases.is_empty());
+        assert_eq!(growth.total_growth_bytes, 0);
+    }
+
+    fn sample_hotspots(
+        instance: &str,
+        entries: Vec<(&str, HotspotCategory, u64)>,
+    ) -> InstanceHotspotsSummary {
+        let total_bytes = entries.iter().map(|(_, _, bytes)| *bytes).sum::<u64>();
+        let hotspot_entries = entries
+            .iter()
+            .map(|(relative_path, category, bytes)| InstanceHotspotPath {
+                relative_path: (*relative_path).to_string(),
+                path: PathBuf::from(format!("/tmp/{instance}/{relative_path}")),
+                category: *category,
+                bytes: *bytes,
+            })
+            .collect::<Vec<_>>();
+
+        let categories = vec![HotspotCategoryStat {
+            category: HotspotCategory::Unknown,
+            bytes: total_bytes,
+        }];
+
+        InstanceHotspotsSummary {
+            root: PathBuf::from("/tmp"),
+            max_depth: 2,
+            top_n_per_instance: 30,
+            categories: categories.clone(),
+            instances: vec![InstanceHotspotGroup {
+                instance: instance.to_string(),
+                total_bytes,
+                categories,
+                entries: hotspot_entries,
+            }],
+            total_bytes,
+        }
     }
 }

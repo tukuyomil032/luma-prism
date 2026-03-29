@@ -112,6 +112,68 @@ pub fn collect_cleanup_targets(root: &Path) -> Vec<CleanupTarget> {
     targets
 }
 
+pub fn collect_map_cache_targets(root: &Path) -> Vec<CleanupTarget> {
+    let mut targets = Vec::new();
+
+    let push_if_exists =
+        |targets: &mut Vec<CleanupTarget>, kind: &str, label: &str, path: PathBuf| {
+            if path.exists() {
+                targets.push(CleanupTarget {
+                    kind: kind.to_string(),
+                    label: label.to_string(),
+                    path,
+                });
+            }
+        };
+
+    let instances_dir = root.join("instances");
+    if let Ok(entries) = std::fs::read_dir(instances_dir) {
+        for entry in entries.flatten() {
+            let instance_path = entry.path();
+            if !instance_path.is_dir() {
+                continue;
+            }
+
+            let instance_name = entry.file_name().to_string_lossy().to_string();
+            let mc = instance_path.join(".minecraft");
+
+            // Optional candidates: potentially large map tiles that can be rebuilt.
+            push_if_exists(
+                &mut targets,
+                "advanced",
+                &format!("{instance_name}/journeymap/cache"),
+                mc.join("journeymap/cache"),
+            );
+            push_if_exists(
+                &mut targets,
+                "advanced",
+                &format!("{instance_name}/journeymap/webmap"),
+                mc.join("journeymap/webmap"),
+            );
+            push_if_exists(
+                &mut targets,
+                "advanced",
+                &format!("{instance_name}/xaerominimap/cache"),
+                mc.join("xaerominimap/cache"),
+            );
+            push_if_exists(
+                &mut targets,
+                "advanced",
+                &format!("{instance_name}/xaeroworldmap/cache"),
+                mc.join("xaeroworldmap/cache"),
+            );
+            push_if_exists(
+                &mut targets,
+                "advanced",
+                &format!("{instance_name}/voxelmap/cache"),
+                mc.join("voxelmap/cache"),
+            );
+        }
+    }
+
+    targets
+}
+
 pub fn list_instances(root: &Path) -> Vec<String> {
     let instances_dir = root.join("instances");
     let Ok(entries) = std::fs::read_dir(instances_dir) else {
@@ -129,7 +191,7 @@ pub fn list_instances(root: &Path) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::collect_cleanup_targets;
+    use super::{collect_cleanup_targets, collect_map_cache_targets};
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -159,6 +221,28 @@ mod tests {
         assert!(labels.contains(&"pack/essential/screenshot-cache".to_string()));
         assert!(labels.contains(&"pack/essential/cosmetic-cache".to_string()));
         assert!(labels.contains(&"pack/essential/screenshot-checksum-caches.json".to_string()));
+
+        fs::remove_dir_all(&root).expect("cleanup temp root");
+    }
+
+    #[test]
+    fn collect_map_cache_targets_requires_opt_in_paths() {
+        let root = create_temp_root("luma-prism-map-cache-targets");
+        let mc_root = root.join("instances/pack/.minecraft");
+
+        fs::create_dir_all(mc_root.join("journeymap/cache")).expect("create journeymap cache");
+        fs::create_dir_all(mc_root.join("xaerominimap/cache")).expect("create xaero minimap");
+
+        let targets = collect_map_cache_targets(&root);
+        let labels: Vec<String> = targets.iter().map(|target| target.label.clone()).collect();
+
+        assert!(labels.contains(&"pack/journeymap/cache".to_string()));
+        assert!(labels.contains(&"pack/xaerominimap/cache".to_string()));
+        assert!(
+            targets
+                .iter()
+                .all(|target| target.kind == "advanced" && target.label.starts_with("pack/"))
+        );
 
         fs::remove_dir_all(&root).expect("cleanup temp root");
     }

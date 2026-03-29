@@ -17,6 +17,12 @@
 
 - unused libraries (`--include-unused-libraries`)
 - unused assets (`--include-unused-assets`)
+- map tile caches (`--include-map-caches`)
+	- `instances/*/.minecraft/journeymap/cache`
+	- `instances/*/.minecraft/journeymap/webmap`
+	- `instances/*/.minecraft/xaerominimap/cache`
+	- `instances/*/.minecraft/xaeroworldmap/cache`
+	- `instances/*/.minecraft/voxelmap/cache`
 
 ## Protected (Never Auto-delete)
 

@@ -75,6 +75,10 @@ pub enum Command {
         /// Number of nested hotspot entries to keep per instance (1-200)
         #[arg(long, default_value_t = 30, value_parser = clap::value_parser!(usize))]
         hotspots_top: usize,
+
+        /// Compare hotspot result with previous snapshot and save current snapshot
+        #[arg(long, action = ArgAction::SetTrue)]
+        hotspots_diff: bool,
     },
 
     /// Clean targets (dry-run by default)
@@ -98,6 +102,10 @@ pub enum Command {
         /// Include detected unused assets as clean candidates
         #[arg(long, action = ArgAction::SetTrue)]
         include_unused_assets: bool,
+
+        /// Include optional map-cache targets (JourneyMap/Xaero/VoxelMap caches)
+        #[arg(long, action = ArgAction::SetTrue)]
+        include_map_caches: bool,
 
         /// Filter by target kind (repeatable: global, instance, advanced)
         #[arg(long = "kind")]
@@ -147,6 +155,7 @@ pub struct CleanMode {
     pub yes: bool,
     pub include_unused_libraries: bool,
     pub include_unused_assets: bool,
+    pub include_map_caches: bool,
     pub kinds: Vec<String>,
     pub min_size_bytes: Option<u64>,
     pub older_than_days: Option<u64>,

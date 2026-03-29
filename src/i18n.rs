@@ -37,6 +37,10 @@ pub enum Msg {
     ScanInstanceHotspotsByCategory,
     ScanInstanceHotspotsInstanceTags,
     ScanInstanceHotspotsTotal,
+    ScanHotspotGrowth,
+    ScanHotspotGrowthTotal,
+    ScanHotspotGrowthNoBaseline,
+    ScanHotspotGrowthComparedEntries,
     ScanNone,
     PagerHelp,
     NoDuplicateMods,
@@ -135,6 +139,18 @@ pub fn text(lang: Language, msg: Msg) -> &'static str {
         (Language::Ja, Msg::ScanInstanceHotspotsInstanceTags) => "分類タグ:",
         (Language::En, Msg::ScanInstanceHotspotsTotal) => "Instance hotspot total",
         (Language::Ja, Msg::ScanInstanceHotspotsTotal) => "ホットスポット合計",
+        (Language::En, Msg::ScanHotspotGrowth) => "[Hotspot growth since previous snapshot]",
+        (Language::Ja, Msg::ScanHotspotGrowth) => "[前回スナップショットからの増加分]",
+        (Language::En, Msg::ScanHotspotGrowthTotal) => "Total growth",
+        (Language::Ja, Msg::ScanHotspotGrowthTotal) => "増加合計",
+        (Language::En, Msg::ScanHotspotGrowthNoBaseline) => {
+            "No baseline snapshot found. Current snapshot has been saved."
+        }
+        (Language::Ja, Msg::ScanHotspotGrowthNoBaseline) => {
+            "比較用スナップショットが見つかりません。現在結果を保存しました。"
+        }
+        (Language::En, Msg::ScanHotspotGrowthComparedEntries) => "Compared entries",
+        (Language::Ja, Msg::ScanHotspotGrowthComparedEntries) => "比較対象エントリ数",
         (Language::En, Msg::ScanNone) => "(none)",
         (Language::Ja, Msg::ScanNone) => "(候補なし)",
         (Language::En, Msg::PagerHelp) => {

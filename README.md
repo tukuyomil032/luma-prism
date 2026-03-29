@@ -32,6 +32,7 @@ By default, cleanup runs in dry-run mode and deletion uses the system trash.
 - World breakdown mode (`region`, `playerdata`, `poi`, etc.)
 - Instance hotspot breakdown in `scan` (depth-based path aggregation)
 - Hotspot category tagging (`world`, `media`, `map-data`, `mod-cache`, `logs`, `resource`, etc.)
+- Hotspot snapshot diff (`--hotspots-diff`) to highlight growth since previous scan
 - Clean preview filtering by kind/size/age and optional interactive candidate selection
 
 ## Table of Contents
@@ -134,6 +135,9 @@ Get-Content .\scripts\uninstall.ps1 -Raw | Invoke-Expression
 # Analyze full instance hotspots with deeper path aggregation
 ./target/release/luma scan --all-instances --hotspots-depth 3 --hotspots-top 60
 
+# Compare against previous snapshot and save current snapshot
+./target/release/luma scan --all-instances --hotspots-diff
+
 # Show worlds with breakdown of large buckets
 ./target/release/luma worlds --breakdown
 
@@ -159,12 +163,14 @@ Useful scan options:
 - `--instance <name>` (repeatable)
 - `--hotspots-depth <n>` (default: `2`)
 - `--hotspots-top <n>` (default: `30`)
+- `--hotspots-diff` (compare with previous snapshot and update snapshot)
 
 Useful clean options:
 
 - `--kind <kind>` (repeatable: `global`, `instance`, `advanced`)
 - `--min-size <size>` (e.g. `500MB`, `2GB`)
 - `--older-than-days <days>`
+- `--include-map-caches` (opt-in map tile caches: JourneyMap/Xaero/VoxelMap)
 - `--select` (interactive candidate selection)
 
 ## Release Automation
