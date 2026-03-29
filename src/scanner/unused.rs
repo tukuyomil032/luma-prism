@@ -1,4 +1,6 @@
-use super::{instance_allowed, UnusedAsset, UnusedAssetsSummary, UnusedLibrariesSummary, UnusedLibrary};
+use super::{
+    UnusedAsset, UnusedAssetsSummary, UnusedLibrariesSummary, UnusedLibrary, instance_allowed,
+};
 use crate::prism::CleanupTarget;
 use log::warn;
 use std::collections::HashSet;

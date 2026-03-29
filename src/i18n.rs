@@ -9,6 +9,7 @@ pub enum Msg {
     TaskScanCleanup,
     TaskScanUnusedLibraries,
     TaskScanUnusedAssets,
+    TaskScanInstanceHotspots,
     TaskCleanTargets,
     TaskScanDuplicateMods,
     TaskScanWorlds,
@@ -32,6 +33,10 @@ pub enum Msg {
     ScanUnusedLibrariesTotal,
     ScanUnusedAssets,
     ScanUnusedAssetsTotal,
+    ScanInstanceHotspots,
+    ScanInstanceHotspotsByCategory,
+    ScanInstanceHotspotsInstanceTags,
+    ScanInstanceHotspotsTotal,
     ScanNone,
     PagerHelp,
     NoDuplicateMods,
@@ -64,6 +69,10 @@ pub fn text(lang: Language, msg: Msg) -> &'static str {
         (Language::Ja, Msg::TaskScanUnusedLibraries) => "未使用 libraries をスキャン中",
         (Language::En, Msg::TaskScanUnusedAssets) => "Scanning unused assets",
         (Language::Ja, Msg::TaskScanUnusedAssets) => "未使用 assets をスキャン中",
+        (Language::En, Msg::TaskScanInstanceHotspots) => "Scanning instance storage hotspots",
+        (Language::Ja, Msg::TaskScanInstanceHotspots) => {
+            "インスタンス内の容量ホットスポットをスキャン中"
+        }
         (Language::En, Msg::TaskCleanTargets) => "Cleaning targets",
         (Language::Ja, Msg::TaskCleanTargets) => "対象を削除中",
         (Language::En, Msg::TaskScanDuplicateMods) => "Scanning duplicate mods",
@@ -77,10 +86,16 @@ pub fn text(lang: Language, msg: Msg) -> &'static str {
         (Language::En, Msg::ConfigReadSelectionFailed) => "failed to read selection",
         (Language::Ja, Msg::ConfigReadSelectionFailed) => "選択の読み取りに失敗しました",
         (Language::En, Msg::SelectInstancesPrompt) => "Choose instances to scan",
-        (Language::Ja, Msg::SelectInstancesPrompt) => "スキャン対象のインスタンスを選択してください",
+        (Language::Ja, Msg::SelectInstancesPrompt) => {
+            "スキャン対象のインスタンスを選択してください"
+        }
         (Language::En, Msg::SelectInstancesReadFailed) => "failed to read instance selection",
-        (Language::Ja, Msg::SelectInstancesReadFailed) => "インスタンス選択の読み取りに失敗しました",
-        (Language::En, Msg::CleanConfirmPrompt) => "Proceed with cleanup? (targets are moved to trash)",
+        (Language::Ja, Msg::SelectInstancesReadFailed) => {
+            "インスタンス選択の読み取りに失敗しました"
+        }
+        (Language::En, Msg::CleanConfirmPrompt) => {
+            "Proceed with cleanup? (targets are moved to trash)"
+        }
         (Language::Ja, Msg::CleanConfirmPrompt) => "削除を実行しますか？(対象はゴミ箱へ移動)",
         (Language::En, Msg::CleanConfirmReadFailed) => "failed to read confirmation input",
         (Language::Ja, Msg::CleanConfirmReadFailed) => "確認入力の読み取りに失敗しました",
@@ -110,10 +125,24 @@ pub fn text(lang: Language, msg: Msg) -> &'static str {
         (Language::Ja, Msg::ScanUnusedAssets) => "[未使用の可能性がある assets]",
         (Language::En, Msg::ScanUnusedAssetsTotal) => "Unused assets total",
         (Language::Ja, Msg::ScanUnusedAssetsTotal) => "未使用 assets の合計",
+        (Language::En, Msg::ScanInstanceHotspots) => "[Instance storage hotspots (all data)]",
+        (Language::Ja, Msg::ScanInstanceHotspots) => {
+            "[インスタンス内の容量ホットスポット(全データ)]"
+        }
+        (Language::En, Msg::ScanInstanceHotspotsByCategory) => "Category summary:",
+        (Language::Ja, Msg::ScanInstanceHotspotsByCategory) => "分類サマリー:",
+        (Language::En, Msg::ScanInstanceHotspotsInstanceTags) => "Category tags:",
+        (Language::Ja, Msg::ScanInstanceHotspotsInstanceTags) => "分類タグ:",
+        (Language::En, Msg::ScanInstanceHotspotsTotal) => "Instance hotspot total",
+        (Language::Ja, Msg::ScanInstanceHotspotsTotal) => "ホットスポット合計",
         (Language::En, Msg::ScanNone) => "(none)",
         (Language::Ja, Msg::ScanNone) => "(候補なし)",
-        (Language::En, Msg::PagerHelp) => "Page {page}/{total}  Next: Right/j/l  Prev: Left/h/k  Quit: q/Enter",
-        (Language::Ja, Msg::PagerHelp) => "ページ {page}/{total}  次へ: Right/j/l  前へ: Left/h/k  終了: q/Enter",
+        (Language::En, Msg::PagerHelp) => {
+            "Page {page}/{total}  Next: Right/j/l  Prev: Left/h/k  Quit: q/Enter"
+        }
+        (Language::Ja, Msg::PagerHelp) => {
+            "ページ {page}/{total}  次へ: Right/j/l  前へ: Left/h/k  終了: q/Enter"
+        }
         (Language::En, Msg::NoDuplicateMods) => "No duplicate mods found.",
         (Language::Ja, Msg::NoDuplicateMods) => "重複 mod は見つかりませんでした。",
         (Language::En, Msg::DuplicateMods) => "Duplicate mods:",
@@ -123,7 +152,9 @@ pub fn text(lang: Language, msg: Msg) -> &'static str {
         (Language::En, Msg::PotentialReclaimable) => "Potential reclaimable",
         (Language::Ja, Msg::PotentialReclaimable) => "削減可能見込み",
         (Language::En, Msg::NoWorldsDetected) => "No worlds detected in selected instances.",
-        (Language::Ja, Msg::NoWorldsDetected) => "選択されたインスタンスでワールドは検出されませんでした。",
+        (Language::Ja, Msg::NoWorldsDetected) => {
+            "選択されたインスタンスでワールドは検出されませんでした。"
+        }
         (Language::En, Msg::Worlds) => "Worlds:",
         (Language::Ja, Msg::Worlds) => "ワールド一覧:",
         (Language::En, Msg::TotalWorldSize) => "Total world size",

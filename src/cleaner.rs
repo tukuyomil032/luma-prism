@@ -43,7 +43,11 @@ pub fn filter_and_select_targets(
     lang: Language,
     allow_interactive: bool,
 ) -> Result<Vec<CleanupTarget>> {
-    let kind_set: HashSet<String> = filter.kinds.iter().map(|kind| kind.to_lowercase()).collect();
+    let kind_set: HashSet<String> = filter
+        .kinds
+        .iter()
+        .map(|kind| kind.to_lowercase())
+        .collect();
     let min_size = filter.min_size_bytes.unwrap_or(0);
     let now = SystemTime::now();
     let older_than = filter
@@ -66,7 +70,11 @@ pub fn filter_and_select_targets(
                 return None;
             }
 
-            let modified = target.path.metadata().ok().and_then(|meta| meta.modified().ok());
+            let modified = target
+                .path
+                .metadata()
+                .ok()
+                .and_then(|meta| meta.modified().ok());
             if let Some(threshold) = older_than {
                 match modified {
                     Some(mtime) if mtime <= threshold => {}

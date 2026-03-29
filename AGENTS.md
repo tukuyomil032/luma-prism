@@ -429,4 +429,17 @@ Agents may also reference:
 .mdc
 ```
 
+### General
+- Commit messages must be in English and use the prefixes `feat:`, `fix:`, `refactor:`, or `docs:`.
+- After completing an implementation, edit, or a single prompt task, check for any remaining items within the current phase. If all items in the current phase have been completed, check if there are items to be implemented in the next phase. If so, ask the user in question mode to select where to proceed with implementation. Do this after every implementation until all implementations in every phase are complete—that is, until the project is ready for release. Additionally, after that question, generate a command that includes a commit message appropriate for the changes made in that implementation, and ask the user in question mode whether to actually execute that command. Do not ask about generating a commit command for every change or implementation within the same phase. However, an exception is made for changes or implementations within the same phase if the scope of each individual implementation is large. Furthermore, even if the user chooses not to execute the commit command, if there are still tasks to be implemented within the same phase or if the next phase remains, continue implementation and repeat the cycle of “question → implementation → question” indefinitely until implementation is complete. The “question” referred to here is not a question asked in the form of text output by you, but rather the multiple-choice questions used when defining requirements in Plan mode. The format for the commit command should be `git commit -m “message” -m ‘message’ -m “message”`, summarizing the implemented content broadly and using the -m option to separate each line with a newline.
+  - Perform Git operations by entering commands directly in the terminal within VSCode. Do not use MCP or similar tools; enter the commands directly.
+    - Adding files: git add .
+    - Commit: As described in the bullet point above, use the format that includes a commit message appropriate for the changes made in each implementation. `git commit -m “message” -m ‘message’ -m “message”`
+    - Push: `git push origin main`
+      - If you run a reset command such as `git reset --soft HEAD^` due to some issue, I will notify you. In that case, you must perform a force push (`git push -f -u origin main`) to avoid conflicts and rejection.
+- After completing the implementation or editing for the given prompt, before building, read all files (.java, .ts, .json, .yml, etc.) from the background. If there are any errors or warnings, investigate the details and cause of the errors and fix them. Since a single fix may not resolve the issue, retrieve the errors from the background again after making the fix and continue the process until there are zero errors and warnings.
+- If there are multiple updates or additions, number them sequentially (1, 2, 3) and assign them to separate tasks. Additionally, all tasks with these numbers must be implemented in a single prompt. Proceed with implementation step by step, reporting the progress of each step to the user as you go.
+  - For example, if there are three tasks—1. Converting to binary IPC (removing Base64), 2. Adaptive FPS control, and 3. Extending rectangular difference rendering on the Java side—and you are instructed to “complete tasks 1 through 3,” you must finish implementing all of them in a single round of prompts.
+
+
 AGENTS.md remains the primary instruction source.

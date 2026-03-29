@@ -41,6 +41,8 @@ pub fn run() -> Result<()> {
         Command::Scan {
             all_instances,
             instances,
+            hotspots_depth,
+            hotspots_top,
         } => {
             let selected =
                 resolve_selected_instances(&root, &instances, all_instances, cli.json, lang)?;
@@ -52,26 +54,44 @@ pub fn run() -> Result<()> {
                 Ok(scanner::scan_cleanup_targets(&root, &targets))
             })?;
 
-            let unused_libraries = run_task(scan_unused_libraries_msg(lang), !cli.json, lang, || {
-                Ok(scanner::scan_unused_libraries_scoped(
-                    &root,
-                    selected.as_ref(),
-                ))
-            })?;
+            let unused_libraries =
+                run_task(scan_unused_libraries_msg(lang), !cli.json, lang, || {
+                    Ok(scanner::scan_unused_libraries_scoped(
+                        &root,
+                        selected.as_ref(),
+                    ))
+                })?;
 
             let unused_assets = run_task(scan_unused_assets_msg(lang), !cli.json, lang, || {
                 Ok(scanner::scan_unused_assets(&root))
             })?;
+
+            let instance_hotspots =
+                run_task(scan_instance_hotspots_msg(lang), !cli.json, lang, || {
+                    Ok(scanner::scan_instance_hotspots_scoped(
+                        &root,
+                        selected.as_ref(),
+                        hotspots_depth,
+                        hotspots_top,
+                    ))
+                })?;
 
             if cli.json {
                 let report = ScanJsonReport {
                     cleanup: summary,
                     unused_libraries,
                     unused_assets,
+                    instance_hotspots,
                 };
                 println!("{}", serde_json::to_string_pretty(&report)?);
             } else {
-                output::present_scan_report(&summary, &unused_libraries, &unused_assets, lang)?;
+                output::present_scan_report(
+                    &summary,
+                    &unused_libraries,
+                    &unused_assets,
+                    &instance_hotspots,
+                    lang,
+                )?;
             }
         }
         Command::Clean {
@@ -85,10 +105,7 @@ pub fn run() -> Result<()> {
             older_than_days,
             select,
         } => {
-            let min_size_bytes = min_size
-                .as_deref()
-                .map(parse_size_to_bytes)
-                .transpose()?;
+            let min_size_bytes = min_size.as_deref().map(parse_size_to_bytes).transpose()?;
 
             let mode = cli::CleanMode {
                 dry_run: dry_run || !apply,
@@ -149,9 +166,7 @@ pub fn run() -> Result<()> {
         Command::Worlds { breakdown } => {
             let summary = run_task(scan_worlds_msg(lang), !cli.json, lang, || {
                 Ok(scanner::scan_world_sizes_scoped_with_breakdown(
-                    &root,
-                    None,
-                    breakdown,
+                    &root, None, breakdown,
                 ))
             })?;
 
@@ -341,6 +356,10 @@ fn scan_unused_assets_msg(lang: Language) -> &'static str {
     text(lang, Msg::TaskScanUnusedAssets)
 }
 
+fn scan_instance_hotspots_msg(lang: Language) -> &'static str {
+    text(lang, Msg::TaskScanInstanceHotspots)
+}
+
 fn clean_targets_msg(lang: Language) -> &'static str {
     text(lang, Msg::TaskCleanTargets)
 }
@@ -391,4 +410,5 @@ struct ScanJsonReport {
     cleanup: scanner::CleanupSummary,
     unused_libraries: scanner::UnusedLibrariesSummary,
     unused_assets: scanner::UnusedAssetsSummary,
+    instance_hotspots: scanner::InstanceHotspotsSummary,
 }

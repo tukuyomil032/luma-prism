@@ -1,6 +1,7 @@
 use super::{
-    instance_allowed, CleanupStat, CleanupSummary, DuplicateModEntry, DuplicateModsSummary,
-    InstanceUsage, UsageSummary, WorldBreakdownItem, WorldStat, WorldsSummary,
+    CleanupStat, CleanupSummary, DuplicateModEntry, DuplicateModsSummary, HotspotCategory,
+    HotspotCategoryStat, InstanceHotspotGroup, InstanceHotspotPath, InstanceHotspotsSummary,
+    InstanceUsage, UsageSummary, WorldBreakdownItem, WorldStat, WorldsSummary, instance_allowed,
 };
 use rayon::prelude::*;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -8,7 +9,13 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
-pub fn scan_cleanup_targets(root: &Path, targets: &[crate::prism::CleanupTarget]) -> CleanupSummary {
+const HOTSPOT_MAX_DEPTH_LIMIT: usize = 6;
+const HOTSPOT_TOP_LIMIT: usize = 200;
+
+pub fn scan_cleanup_targets(
+    root: &Path,
+    targets: &[crate::prism::CleanupTarget],
+) -> CleanupSummary {
     let mut entries: Vec<CleanupStat> = targets
         .par_iter()
         .map(|target| CleanupStat {
@@ -231,6 +238,281 @@ pub fn scan_instance_usage_scoped(
     }
 }
 
+pub fn scan_instance_hotspots_scoped(
+    root: &Path,
+    selected_instances: Option<&HashSet<String>>,
+    max_depth: usize,
+    top_n_per_instance: usize,
+) -> InstanceHotspotsSummary {
+    let max_depth = max_depth.clamp(1, HOTSPOT_MAX_DEPTH_LIMIT);
+    let top_n_per_instance = top_n_per_instance.clamp(1, HOTSPOT_TOP_LIMIT);
+    let mut instances = Vec::new();
+    let instances_dir = root.join("instances");
+
+    if let Ok(entries) = fs::read_dir(&instances_dir) {
+        instances = entries
+            .flatten()
+            .filter(|entry| entry.path().is_dir())
+            .map(|entry| {
+                let name = entry.file_name().to_string_lossy().to_string();
+                let mc_dir = entry.path().join(".minecraft");
+                (name, mc_dir)
+            })
+            .filter(|(name, mc_dir)| instance_allowed(name, selected_instances) && mc_dir.exists())
+            .collect();
+    }
+
+    let mut groups: Vec<InstanceHotspotGroup> = instances
+        .par_iter()
+        .map(|(instance, mc_dir)| {
+            let mut buckets: HashMap<String, u64> = HashMap::new();
+            let mut category_buckets: HashMap<HotspotCategory, u64> = HashMap::new();
+            let mut total_bytes = 0_u64;
+
+            for entry in WalkDir::new(mc_dir)
+                .follow_links(true)
+                .into_iter()
+                .filter_map(Result::ok)
+                .filter(|entry| entry.file_type().is_file())
+            {
+                let bytes = entry.metadata().ok().map(|meta| meta.len()).unwrap_or(0);
+                if bytes == 0 {
+                    continue;
+                }
+
+                total_bytes += bytes;
+
+                let Ok(rel) = entry.path().strip_prefix(mc_dir) else {
+                    continue;
+                };
+
+                let parts: Vec<String> = rel
+                    .components()
+                    .filter_map(path_component_to_string)
+                    .collect();
+
+                if parts.is_empty() {
+                    continue;
+                }
+
+                let category = classify_hotspot_category(&parts);
+                *category_buckets.entry(category).or_insert(0) += bytes;
+
+                let levels = usize::min(max_depth, parts.len());
+                for depth in 1..=levels {
+                    let key = parts[..depth].join("/");
+                    *buckets.entry(key).or_insert(0) += bytes;
+                }
+            }
+
+            let mut entries: Vec<InstanceHotspotPath> = buckets
+                .into_iter()
+                .map(|(relative_path, bytes)| InstanceHotspotPath {
+                    path: mc_dir.join(&relative_path),
+                    category: classify_hotspot_category_from_relative_path(&relative_path),
+                    relative_path,
+                    bytes,
+                })
+                .collect();
+
+            let categories = sorted_category_stats(category_buckets);
+
+            entries.sort_by(|a, b| {
+                b.bytes
+                    .cmp(&a.bytes)
+                    .then_with(|| a.relative_path.cmp(&b.relative_path))
+            });
+
+            let mut depth1_entries: Vec<InstanceHotspotPath> = entries
+                .iter()
+                .filter(|entry| !entry.relative_path.contains('/'))
+                .cloned()
+                .collect();
+            let mut nested_entries: Vec<InstanceHotspotPath> = entries
+                .into_iter()
+                .filter(|entry| entry.relative_path.contains('/'))
+                .collect();
+
+            if nested_entries.len() > top_n_per_instance {
+                nested_entries.truncate(top_n_per_instance);
+            }
+
+            depth1_entries.extend(nested_entries);
+
+            InstanceHotspotGroup {
+                instance: instance.clone(),
+                total_bytes,
+                categories,
+                entries: depth1_entries,
+            }
+        })
+        .collect();
+
+    groups.sort_by(|a, b| {
+        b.total_bytes
+            .cmp(&a.total_bytes)
+            .then_with(|| a.instance.cmp(&b.instance))
+    });
+
+    let total_bytes = groups.iter().map(|group| group.total_bytes).sum();
+    let mut summary_categories: HashMap<HotspotCategory, u64> = HashMap::new();
+
+    for group in &groups {
+        for stat in &group.categories {
+            *summary_categories.entry(stat.category).or_insert(0) += stat.bytes;
+        }
+    }
+
+    InstanceHotspotsSummary {
+        root: root.to_path_buf(),
+        max_depth,
+        top_n_per_instance,
+        categories: sorted_category_stats(summary_categories),
+        instances: groups,
+        total_bytes,
+    }
+}
+
+fn path_component_to_string(component: std::path::Component<'_>) -> Option<String> {
+    match component {
+        std::path::Component::Normal(value) => Some(value.to_string_lossy().to_string()),
+        _ => None,
+    }
+}
+
+fn classify_hotspot_category_from_relative_path(relative_path: &str) -> HotspotCategory {
+    let parts: Vec<String> = relative_path
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .map(|part| part.to_string())
+        .collect();
+    classify_hotspot_category(&parts)
+}
+
+fn classify_hotspot_category(parts: &[String]) -> HotspotCategory {
+    if parts.is_empty() {
+        return HotspotCategory::Unknown;
+    }
+
+    let lower_parts: Vec<String> = parts.iter().map(|part| part.to_ascii_lowercase()).collect();
+    let first = lower_parts[0].as_str();
+
+    let has_map_keyword = lower_parts.iter().any(|part| {
+        part.contains("journeymap")
+            || part.contains("xaero")
+            || part.contains("voxelmap")
+            || part.contains("worldmap")
+            || part.contains("minimap")
+            || part.contains("ftbchunks")
+            || part.contains("dynmap")
+            || part.contains("squaremap")
+    });
+
+    let has_media_keyword = lower_parts.iter().any(|part| {
+        part.contains("screenshot")
+            || part.contains("replay")
+            || part.contains("video")
+            || part.contains("recording")
+            || part.contains("capture")
+    });
+
+    let has_cache_keyword = lower_parts.iter().any(|part| {
+        part.contains("cache")
+            || part == "tmp"
+            || part == "temp"
+            || part.contains("download")
+            || part.contains("checksum")
+    });
+
+    let has_log_keyword = lower_parts.iter().any(|part| {
+        part == "logs"
+            || part.contains("crash-report")
+            || part.contains("latest.log")
+            || part.ends_with(".log")
+    });
+
+    if first == "saves" {
+        return if has_map_keyword {
+            HotspotCategory::MapData
+        } else {
+            HotspotCategory::World
+        };
+    }
+
+    if first == "mods" {
+        return HotspotCategory::Mods;
+    }
+
+    if first == "config" {
+        return HotspotCategory::Config;
+    }
+
+    if first == "resourcepacks"
+        || first == "shaderpacks"
+        || first == "assets"
+        || first == "resource"
+    {
+        return HotspotCategory::Resource;
+    }
+
+    if first == "logs" || first == "crash-reports" || has_log_keyword {
+        return HotspotCategory::Logs;
+    }
+
+    if first == "screenshots"
+        || first == "replay_recordings"
+        || first == "replay_videos"
+        || (has_media_keyword && first != "essential")
+    {
+        return HotspotCategory::Media;
+    }
+
+    if first == "journeymap"
+        || first.contains("xaero")
+        || first.contains("voxelmap")
+        || first == "litematica"
+        || first == "schematics"
+        || (first == "local" && has_map_keyword)
+        || has_map_keyword
+    {
+        return HotspotCategory::MapData;
+    }
+
+    if first == "essential" {
+        return if has_cache_keyword {
+            HotspotCategory::ModCache
+        } else if has_media_keyword {
+            HotspotCategory::Media
+        } else {
+            HotspotCategory::ModCache
+        };
+    }
+
+    if first == ".replay_cache" || has_cache_keyword {
+        return HotspotCategory::ModCache;
+    }
+
+    HotspotCategory::Unknown
+}
+
+fn sorted_category_stats(
+    category_buckets: HashMap<HotspotCategory, u64>,
+) -> Vec<HotspotCategoryStat> {
+    let mut categories: Vec<HotspotCategoryStat> = category_buckets
+        .into_iter()
+        .filter(|(_, bytes)| *bytes > 0)
+        .map(|(category, bytes)| HotspotCategoryStat { category, bytes })
+        .collect();
+
+    categories.sort_by(|a, b| {
+        b.bytes
+            .cmp(&a.bytes)
+            .then_with(|| a.category.as_label().cmp(b.category.as_label()))
+    });
+
+    categories
+}
+
 fn world_breakdown(world_path: &Path) -> Vec<WorldBreakdownItem> {
     let mut buckets: BTreeMap<String, u64> = BTreeMap::new();
 
@@ -251,8 +533,9 @@ fn world_breakdown(world_path: &Path) -> Vec<WorldBreakdownItem> {
         }
 
         let bucket = match name.as_str() {
-            "region" | "playerdata" | "poi" | "data" | "entities" | "advancements"
-            | "stats" => name.clone(),
+            "region" | "playerdata" | "poi" | "data" | "entities" | "advancements" | "stats" => {
+                name.clone()
+            }
             "DIM-1" | "DIM1" | "dimensions" => name.clone(),
             _ if name.starts_with("DIM") => name.clone(),
             _ => "other".to_string(),
@@ -281,4 +564,68 @@ pub fn dir_size(path: &Path) -> u64 {
         .filter(|entry| entry.file_type().is_file())
         .filter_map(|entry| entry.metadata().ok().map(|meta| meta.len()))
         .sum()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{HotspotCategory, classify_hotspot_category_from_relative_path};
+
+    #[test]
+    fn classify_world_path() {
+        let category =
+            classify_hotspot_category_from_relative_path("saves/survival/region/r.0.0.mca");
+        assert_eq!(category, HotspotCategory::World);
+    }
+
+    #[test]
+    fn classify_map_data_path() {
+        let category =
+            classify_hotspot_category_from_relative_path("saves/survival/ftbchunks/data/0,0.dat");
+        assert_eq!(category, HotspotCategory::MapData);
+    }
+
+    #[test]
+    fn classify_mod_cache_path() {
+        let category =
+            classify_hotspot_category_from_relative_path("essential/screenshot-cache/chunk-1.bin");
+        assert_eq!(category, HotspotCategory::ModCache);
+    }
+
+    #[test]
+    fn classify_media_path() {
+        let category =
+            classify_hotspot_category_from_relative_path("screenshots/2026-03-29_12.00.00.png");
+        assert_eq!(category, HotspotCategory::Media);
+    }
+
+    #[test]
+    fn classify_logs_path() {
+        let category = classify_hotspot_category_from_relative_path("logs/latest.log");
+        assert_eq!(category, HotspotCategory::Logs);
+    }
+
+    #[test]
+    fn classify_resource_path() {
+        let category =
+            classify_hotspot_category_from_relative_path("shaderpacks/Complementary.zip");
+        assert_eq!(category, HotspotCategory::Resource);
+    }
+
+    #[test]
+    fn classify_mods_path() {
+        let category = classify_hotspot_category_from_relative_path("mods/sodium-fabric.jar");
+        assert_eq!(category, HotspotCategory::Mods);
+    }
+
+    #[test]
+    fn classify_config_path() {
+        let category = classify_hotspot_category_from_relative_path("config/sodium-options.json");
+        assert_eq!(category, HotspotCategory::Config);
+    }
+
+    #[test]
+    fn classify_unknown_path() {
+        let category = classify_hotspot_category_from_relative_path("foo/bar/data.bin");
+        assert_eq!(category, HotspotCategory::Unknown);
+    }
 }

@@ -1,8 +1,10 @@
 use crate::cli::Language;
 use crate::i18n::{Msg, text};
-use crate::scanner::{CleanupSummary, UnusedAssetsSummary, UnusedLibrariesSummary};
+use crate::scanner::{
+    CleanupSummary, InstanceHotspotsSummary, UnusedAssetsSummary, UnusedLibrariesSummary,
+};
 use anyhow::Result;
-use console::{style, truncate_str, Key, Term};
+use console::{Key, Term, style, truncate_str};
 use indicatif::HumanBytes;
 
 pub fn human_bytes(bytes: u64) -> String {
@@ -13,9 +15,10 @@ pub fn present_scan_report(
     summary: &CleanupSummary,
     unused_libs: &UnusedLibrariesSummary,
     unused_assets: &UnusedAssetsSummary,
+    hotspots: &InstanceHotspotsSummary,
     lang: Language,
 ) -> Result<()> {
-    let lines = build_scan_lines(summary, unused_libs, unused_assets, lang);
+    let lines = build_scan_lines(summary, unused_libs, unused_assets, hotspots, lang);
     pager(&lines, lang)
 }
 
@@ -23,6 +26,7 @@ fn build_scan_lines(
     summary: &CleanupSummary,
     unused_libs: &UnusedLibrariesSummary,
     unused_assets: &UnusedAssetsSummary,
+    hotspots: &InstanceHotspotsSummary,
     lang: Language,
 ) -> Vec<String> {
     let mut lines = Vec::new();
@@ -82,6 +86,92 @@ fn build_scan_lines(
         "{}: {}",
         text(lang, Msg::ScanUnusedAssetsTotal),
         human_bytes(unused_assets.total_bytes)
+    ));
+
+    lines.push(String::new());
+    lines.push(text(lang, Msg::ScanInstanceHotspots).to_string());
+
+    lines.push(text(lang, Msg::ScanInstanceHotspotsByCategory).to_string());
+    if hotspots.categories.is_empty() {
+        lines.push(text(lang, Msg::ScanNone).to_string());
+    } else {
+        for stat in &hotspots.categories {
+            let ratio = if hotspots.total_bytes > 0 {
+                (stat.bytes as f64 / hotspots.total_bytes as f64) * 100.0
+            } else {
+                0.0
+            };
+            lines.push(format!(
+                "  {:>6.1}% {:>10}  [{}]",
+                ratio,
+                human_bytes(stat.bytes),
+                stat.category.as_label()
+            ));
+        }
+    }
+
+    lines.push(String::new());
+
+    if hotspots.instances.is_empty() {
+        lines.push(text(lang, Msg::ScanNone).to_string());
+    } else {
+        for group in &hotspots.instances {
+            lines.push(format!(
+                "{} ({})",
+                group.instance,
+                human_bytes(group.total_bytes)
+            ));
+
+            if group.entries.is_empty() {
+                lines.push(format!("  {}", text(lang, Msg::ScanNone)));
+                lines.push(String::new());
+                continue;
+            }
+
+            if !group.categories.is_empty() {
+                lines.push(format!(
+                    "  {}",
+                    text(lang, Msg::ScanInstanceHotspotsInstanceTags)
+                ));
+                for stat in &group.categories {
+                    let ratio = if group.total_bytes > 0 {
+                        (stat.bytes as f64 / group.total_bytes as f64) * 100.0
+                    } else {
+                        0.0
+                    };
+                    lines.push(format!(
+                        "    {:>6.1}% {:>10}  [{}]",
+                        ratio,
+                        human_bytes(stat.bytes),
+                        stat.category.as_label()
+                    ));
+                }
+            }
+
+            for entry in &group.entries {
+                let ratio = if group.total_bytes > 0 {
+                    (entry.bytes as f64 / group.total_bytes as f64) * 100.0
+                } else {
+                    0.0
+                };
+
+                lines.push(format!(
+                    "  {:>6.1}% {:>10}  [{}] {}",
+                    ratio,
+                    human_bytes(entry.bytes),
+                    entry.category.as_label(),
+                    entry.relative_path
+                ));
+            }
+
+            lines.push(String::new());
+        }
+    }
+
+    lines.push(format!(
+        "{}: {}",
+        text(lang, Msg::ScanInstanceHotspotsTotal),
+        human_bytes(hotspots.total_bytes)
     ));
 
     lines

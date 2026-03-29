@@ -15,6 +15,7 @@ luma-prism scans PrismLauncher data and helps you reclaim space safely.
 
 It focuses on:
 - safe cleanup targets (`cache`, `logs`, `meta`, instance logs/crash reports)
+- full instance hotspot analysis (all `.minecraft` data, not only cleanup-safe paths)
 - duplicate mod detection
 - world size analysis
 - per-instance usage summaries
@@ -29,6 +30,8 @@ By default, cleanup runs in dry-run mode and deletion uses the system trash.
 - Interactive instance selection for `scan`
 - Paged scan report viewer
 - World breakdown mode (`region`, `playerdata`, `poi`, etc.)
+- Instance hotspot breakdown in `scan` (depth-based path aggregation)
+- Hotspot category tagging (`world`, `media`, `map-data`, `mod-cache`, `logs`, `resource`, etc.)
 - Clean preview filtering by kind/size/age and optional interactive candidate selection
 
 ## Table of Contents
@@ -128,6 +131,9 @@ Get-Content .\scripts\uninstall.ps1 -Raw | Invoke-Expression
 # Analyze reclaimable storage
 ./target/release/luma scan
 
+# Analyze full instance hotspots with deeper path aggregation
+./target/release/luma scan --all-instances --hotspots-depth 3 --hotspots-top 60
+
 # Show worlds with breakdown of large buckets
 ./target/release/luma worlds --breakdown
 
@@ -146,6 +152,13 @@ Get-Content .\scripts\uninstall.ps1 -Raw | Invoke-Expression
 - `luma worlds`
 - `luma usage`
 - `luma config`
+
+Useful scan options:
+
+- `--all-instances`
+- `--instance <name>` (repeatable)
+- `--hotspots-depth <n>` (default: `2`)
+- `--hotspots-top <n>` (default: `30`)
 
 Useful clean options:
 

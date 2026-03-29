@@ -67,6 +67,14 @@ pub enum Command {
         /// Restrict scan to specific instances (repeatable)
         #[arg(long = "instance")]
         instances: Vec<String>,
+
+        /// Hotspot aggregation depth (1-6)
+        #[arg(long, default_value_t = 2, value_parser = clap::value_parser!(usize))]
+        hotspots_depth: usize,
+
+        /// Number of nested hotspot entries to keep per instance (1-200)
+        #[arg(long, default_value_t = 30, value_parser = clap::value_parser!(usize))]
+        hotspots_top: usize,
     },
 
     /// Clean targets (dry-run by default)

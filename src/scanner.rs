@@ -74,6 +74,68 @@ pub struct UsageSummary {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct InstanceHotspotPath {
+    pub relative_path: String,
+    pub path: PathBuf,
+    pub category: HotspotCategory,
+    pub bytes: u64,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum HotspotCategory {
+    World,
+    Media,
+    MapData,
+    ModCache,
+    Logs,
+    Resource,
+    Mods,
+    Config,
+    Unknown,
+}
+
+impl HotspotCategory {
+    pub fn as_label(self) -> &'static str {
+        match self {
+            HotspotCategory::World => "world",
+            HotspotCategory::Media => "media",
+            HotspotCategory::MapData => "map-data",
+            HotspotCategory::ModCache => "mod-cache",
+            HotspotCategory::Logs => "logs",
+            HotspotCategory::Resource => "resource",
+            HotspotCategory::Mods => "mods",
+            HotspotCategory::Config => "config",
+            HotspotCategory::Unknown => "unknown",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct HotspotCategoryStat {
+    pub category: HotspotCategory,
+    pub bytes: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct InstanceHotspotGroup {
+    pub instance: String,
+    pub total_bytes: u64,
+    pub categories: Vec<HotspotCategoryStat>,
+    pub entries: Vec<InstanceHotspotPath>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct InstanceHotspotsSummary {
+    pub root: PathBuf,
+    pub max_depth: usize,
+    pub top_n_per_instance: usize,
+    pub categories: Vec<HotspotCategoryStat>,
+    pub instances: Vec<InstanceHotspotGroup>,
+    pub total_bytes: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct UnusedLibrary {
     pub relative_path: String,
     pub path: PathBuf,
@@ -104,8 +166,8 @@ pub struct UnusedAssetsSummary {
 }
 
 pub use scan::{
-    dir_size, scan_cleanup_targets, scan_duplicate_mods, scan_instance_usage,
-    scan_world_sizes_scoped_with_breakdown,
+    dir_size, scan_cleanup_targets, scan_duplicate_mods, scan_instance_hotspots_scoped,
+    scan_instance_usage, scan_world_sizes_scoped_with_breakdown,
 };
 pub use unused::{
     cleanup_targets_from_unused_assets, cleanup_targets_from_unused_libraries, scan_unused_assets,
